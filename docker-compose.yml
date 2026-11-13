@@ -1,0 +1,14 @@
+# Alternativa a `npm run db` si tienes Docker.
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: tienda
+      POSTGRES_PASSWORD: tienda
+      POSTGRES_DB: tienda
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+volumes:
+  pgdata:

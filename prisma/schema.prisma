@@ -1,0 +1,520 @@
+// Modelo de datos de la plantilla e-commerce (artículos eléctricos).
+// Montos en CLP (enteros, IVA incluido). Cantidades técnicas (metros, stock) en Decimal.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AdminRole {
+  OWNER
+  EDITOR
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ProductType {
+  SIMPLE
+  KIT
+}
+
+/// UNIT = por unidad · METER = por metro · PACK = rollo/caja
+enum SaleUnit {
+  UNIT
+  METER
+  PACK
+}
+
+enum AttributeType {
+  NUMBER
+  TEXT
+  SELECT
+  BOOLEAN
+}
+
+enum RelationType {
+  CONNECTS_WITH
+  SIMILAR
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  PREPARING
+  SHIPPED
+  READY_FOR_PICKUP
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum Fulfillment {
+  SHIPPING
+  PICKUP
+}
+
+enum PaymentProvider {
+  WEBPAY
+  MERCADOPAGO
+  MANUAL_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum HomeSectionType {
+  HERO
+  CATEGORIES
+  KITS
+  BESTSELLERS
+  FEATURED
+  BANNER
+}
+
+enum ImportStatus {
+  PREVIEW
+  COMMITTED
+  FAILED
+}
+
+// ─────────────────────────── Usuarios ───────────────────────────
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         AdminRole @default(EDITOR)
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Customer {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  phone        String?
+  rut          String?
+  /// null = cliente invitado (solo tiene pedidos, no puede iniciar sesión)
+  passwordHash String?
+  addresses    Address[]
+  orders       Order[]
+  carts        Cart[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Address {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  label      String?
+  street     String
+  number     String
+  apartment  String?
+  comuna     String
+  region     String
+  notes      String?
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
+}
+
+// ─────────────────────── Tienda / Apariencia ───────────────────────
+
+/// Fila única (id = 1). Lo que está aquí sobrescribe theme.config.ts y variables de entorno.
+model StoreSettings {
+  id                 Int         @id @default(1)
+  storeName          String
+  logoAssetId        String?
+  logoAsset          MediaAsset? @relation("StoreLogo", fields: [logoAssetId], references: [id], onDelete: SetNull)
+  faviconAssetId     String?
+  faviconAsset       MediaAsset? @relation("StoreFavicon", fields: [faviconAssetId], references: [id], onDelete: SetNull)
+  /// "plano" | "claro" | "cobre" (ver theme.config.ts)
+  themePreset        String?
+  /// Tokens parciales que pisan al preset
+  themeOverrides     Json?
+  contactEmail       String?
+  contactPhone       String?
+  pickupEnabled      Boolean     @default(true)
+  pickupAddress      String?
+  pickupInstructions String?
+  /// { banco, tipoCuenta, numeroCuenta, titular, rut, email }
+  bankTransferInfo   Json?
+  seoDescription     String?
+  updatedAt          DateTime    @updatedAt
+}
+
+model HomeSection {
+  id       String          @id @default(cuid())
+  type     HomeSectionType
+  enabled  Boolean         @default(true)
+  position Int
+  title    String?
+  subtitle String?
+  config   Json?
+
+  @@index([position])
+}
+
+model MediaAsset {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  url       String
+  mimeType  String
+  size      Int
+  width     Int?
+  height    Int?
+  createdAt DateTime @default(now())
+
+  productImages ProductImage[]
+  categories    Category[]
+  logoOf        StoreSettings[] @relation("StoreLogo")
+  faviconOf     StoreSettings[] @relation("StoreFavicon")
+}
+
+// ─────────────────────────── Catálogo ───────────────────────────
+
+model Category {
+  id           String              @id @default(cuid())
+  name         String
+  slug         String              @unique
+  description  String?
+  parentId     String?
+  parent       Category?           @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Category[]          @relation("CategoryTree")
+  position     Int                 @default(0)
+  imageAssetId String?
+  imageAsset   MediaAsset?         @relation(fields: [imageAssetId], references: [id], onDelete: SetNull)
+  /// Atributos técnicos sugeridos; se heredan a las subcategorías
+  attributes   CategoryAttribute[]
+  products     Product[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([parentId, position])
+}
+
+model AttributeDefinition {
+  id         String                  @id @default(cuid())
+  /// Clave estable: "seccion_mm2", "amperaje", "voltaje", "ip"…
+  key        String                  @unique
+  label      String
+  type       AttributeType
+  unit       String?
+  /// Opciones para SELECT
+  options    String[]
+  filterable Boolean                 @default(true)
+  position   Int                     @default(0)
+  categories CategoryAttribute[]
+  values     ProductAttributeValue[]
+}
+
+model CategoryAttribute {
+  categoryId  String
+  attributeId String
+  category    Category            @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  attribute   AttributeDefinition @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  /// Si es obligatorio, entra en el checklist "listo para publicar"
+  required    Boolean             @default(false)
+  position    Int                 @default(0)
+
+  @@id([categoryId, attributeId])
+}
+
+model Product {
+  id                String        @id @default(cuid())
+  name              String
+  slug              String        @unique
+  brand             String?
+  shortDescription  String?
+  description       String?
+  type              ProductType   @default(SIMPLE)
+  status            ProductStatus @default(DRAFT)
+  categoryId        String?
+  category          Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  saleUnit          SaleUnit      @default(UNIT)
+  /// CLP con IVA. Por unidad, por metro o por rollo/caja según saleUnit. En kits: precio del kit.
+  price             Int
+  compareAtPrice    Int?
+  // ── Venta por metro ──
+  /// Largos predefinidos en metros, ej. [5, 10, 25, 50, 100]
+  lengthPresets     Decimal[]     @db.Decimal(8, 2)
+  allowCustomLength Boolean       @default(false)
+  minLength         Decimal?      @db.Decimal(8, 2)
+  maxLength         Decimal?      @db.Decimal(8, 2)
+  lengthStep        Decimal?      @db.Decimal(8, 2)
+  // ── Venta por rollo/caja ──
+  /// Contenido del empaque (100 = 100 m o 100 un)
+  packContent       Decimal?      @db.Decimal(10, 2)
+  /// "Rollo 100 m", "Caja 10 un"
+  packLabel         String?
+  seoTitle          String?
+  seoDescription    String?
+  featured          Boolean       @default(false)
+  /// Contador para "más vendidos"
+  soldCount         Int           @default(0)
+  publishedAt       DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  images      ProductImage[]
+  variants    ProductVariant[]
+  attributes  ProductAttributeValue[]
+  kitItems    KitItem[]               @relation("KitParent")
+  relatedFrom ProductRelation[]       @relation("RelFrom")
+  relatedTo   ProductRelation[]       @relation("RelTo")
+
+  @@index([status, categoryId])
+  @@index([status, soldCount])
+  @@index([type, status])
+}
+
+model ProductImage {
+  id        String     @id @default(cuid())
+  productId String
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  assetId   String
+  asset     MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  position  Int
+  alt       String?
+
+  @@index([productId, position])
+}
+
+model ProductVariant {
+  id            String    @id @default(cuid())
+  productId     String
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku           String?   @unique
+  /// "Rojo", "Por defecto"
+  name          String
+  /// { "color": "Rojo" }
+  options       Json?
+  priceOverride Int?
+  /// Unidades, metros o rollos/cajas según saleUnit del producto
+  stock         Decimal   @default(0) @db.Decimal(12, 2)
+  isDefault     Boolean   @default(false)
+  active        Boolean   @default(true)
+  position      Int       @default(0)
+  usedInKits    KitItem[]
+
+  @@index([productId, position])
+}
+
+model ProductAttributeValue {
+  productId   String
+  attributeId String
+  product     Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  attribute   AttributeDefinition @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  valueText   String?
+  valueNumber Decimal?            @db.Decimal(12, 3)
+  valueBool   Boolean?
+
+  @@id([productId, attributeId])
+  @@index([attributeId, valueNumber])
+  @@index([attributeId, valueText])
+}
+
+model ProductRelation {
+  fromId   String
+  toId     String
+  from     Product      @relation("RelFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to       Product      @relation("RelTo", fields: [toId], references: [id], onDelete: Cascade)
+  type     RelationType @default(CONNECTS_WITH)
+  position Int          @default(0)
+
+  @@id([fromId, toId])
+}
+
+model KitItem {
+  id        String         @id @default(cuid())
+  kitId     String
+  kit       Product        @relation("KitParent", fields: [kitId], references: [id], onDelete: Cascade)
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  /// Unidades, o metros si el componente se vende por metro
+  quantity  Decimal        @db.Decimal(10, 2)
+  position  Int            @default(0)
+
+  @@index([kitId])
+}
+
+// ─────────────────────── Despacho y pagos ───────────────────────
+
+model ShippingZone {
+  id               String   @id @default(cuid())
+  name             String
+  comunas          String[]
+  price            Int
+  freeShippingOver Int?
+  estimatedDays    String?
+  /// Zona por defecto: aplica a comunas que no estén en ninguna otra zona
+  isFallback       Boolean  @default(false)
+  active           Boolean  @default(true)
+  position         Int      @default(0)
+}
+
+/// Activación y textos por medio de pago. Las credenciales viven solo en variables de entorno.
+model PaymentMethodSetting {
+  provider     PaymentProvider @id
+  enabled      Boolean         @default(false)
+  displayName  String
+  instructions String?
+  position     Int             @default(0)
+}
+
+// ─────────────────────── Carrito y pedidos ───────────────────────
+
+model Cart {
+  id         String     @id @default(cuid())
+  /// Valor de la cookie httpOnly del carrito
+  token      String     @unique
+  customerId String?
+  customer   Customer?  @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  items      CartItem[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variantId String
+  /// Número de piezas
+  quantity  Int
+  /// Metros por pieza (solo si el producto se vende por metro)
+  length    Decimal? @db.Decimal(8, 2)
+  createdAt DateTime @default(now())
+
+  @@index([cartId])
+}
+
+model Order {
+  id               String             @id @default(cuid())
+  number           Int                @unique @default(autoincrement())
+  /// Permite ver el pedido sin cuenta (/pedido/[token])
+  publicToken      String             @unique @default(cuid())
+  customerId       String?
+  customer         Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  email            String
+  name             String
+  phone            String
+  rut              String?
+  status           OrderStatus        @default(PENDING_PAYMENT)
+  fulfillment      Fulfillment
+  shippingAddress  Json?
+  shippingZoneId   String?
+  shippingZoneName String?
+  subtotal         Int
+  shippingCost     Int
+  total            Int
+  paymentProvider  PaymentProvider
+  customerNotes    String?
+  /// Se libera el stock reservado si no se paga antes de esta fecha
+  expiresAt        DateTime?
+  items            OrderItem[]
+  payments         Payment[]
+  events           OrderStatusEvent[]
+  notes            OrderNote[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([status, createdAt])
+  @@index([customerId])
+  @@index([email])
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String?
+  variantId   String?
+  name        String
+  variantName String?
+  sku         String?
+  saleUnit    SaleUnit
+  unitPrice   Int
+  quantity    Int
+  length      Decimal? @db.Decimal(8, 2)
+  lineTotal   Int
+  /// Componentes del kit al momento de la compra
+  kitSnapshot Json?
+
+  @@index([orderId])
+}
+
+model Payment {
+  id         String          @id @default(cuid())
+  orderId    String
+  order      Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider   PaymentProvider
+  status     PaymentStatus   @default(PENDING)
+  amount     Int
+  /// Token de Webpay / id de preferencia o pago de Mercado Pago
+  externalId String?         @unique
+  raw        Json?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([orderId])
+}
+
+model OrderStatusEvent {
+  id          String       @id @default(cuid())
+  orderId     String
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  from        OrderStatus?
+  to          OrderStatus
+  adminUserId String?
+  comment     String?
+  createdAt   DateTime     @default(now())
+
+  @@index([orderId])
+}
+
+model OrderNote {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  authorId  String?
+  body      String
+  /// false = visible para el cliente
+  internal  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+}
+
+// ─────────────────────────── Carga masiva ───────────────────────────
+
+model ImportJob {
+  id          String       @id @default(cuid())
+  fileName    String
+  createdById String
+  status      ImportStatus @default(PREVIEW)
+  /// Columna del archivo → campo
+  mapping     Json
+  /// Filas normalizadas con errores/advertencias
+  rows        Json
+  summary     Json?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
