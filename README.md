@@ -78,7 +78,7 @@ Tokens disponibles (variables CSS): `--color-primary`, `--color-accent`, `--colo
 
 ## Desplegar en Railway
 
-El proyecto ya trae `railway.json`: build (`npm run build`), arranque (`npm run start`) y healthcheck (`/api/health`). **Al arrancar**, `scripts/start.ts`:
+El proyecto declara su infraestructura en `.railway/railway.ts` (Infrastructure as Code de Railway: servicio web, PostgreSQL, volumen `/data`, build, arranque y healthcheck `/api/health`). Se aplica con `railway config apply`. **Al arrancar**, `scripts/start.ts`:
 
 1. valida las variables de entorno (mensajes claros si falta algo),
 2. ejecuta `prisma migrate deploy`,
