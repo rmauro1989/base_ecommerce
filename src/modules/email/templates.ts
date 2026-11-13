@@ -83,3 +83,21 @@ export function orderConfirmationEmail(opts: {
   ].join("\n");
   return { subject, html, text };
 }
+
+/** Aviso al cliente de cambio de estado. */
+export function orderStatusEmail(opts: { storeName: string; theme: ThemeTokens; orderNumber: number; name: string; statusLabel: string; note?: string | null; orderUrl: string }) {
+  const t = opts.theme;
+  const subject = `Pedido #${opts.orderNumber}: ${opts.statusLabel} · ${opts.storeName}`;
+  const html = `<!doctype html><html><body style="margin:0;background:${t.colorBg};font-family:Arial,Helvetica,sans-serif;color:${t.colorText}">
+<div style="max-width:560px;margin:0 auto;padding:24px">
+  <div style="background:${t.colorPrimary};color:${pickOnColor(t.colorPrimary)};padding:16px 20px;border-radius:${t.radius}px;font-size:20px;font-weight:bold">${esc(opts.storeName)}</div>
+  <div style="background:${t.colorSurface};padding:20px;margin-top:12px;border-radius:${t.radius}px">
+    <p style="margin:0 0 8px">Hola ${esc(opts.name.split(" ")[0])},</p>
+    <p style="margin:0 0 12px">Tu pedido <strong>#${opts.orderNumber}</strong> cambió a: <strong>${esc(opts.statusLabel)}</strong>.</p>
+    ${opts.note ? `<p style="margin:0 0 12px;color:${t.colorMuted}">${esc(opts.note)}</p>` : ""}
+    <p style="margin:16px 0 0"><a href="${esc(opts.orderUrl)}" style="display:inline-block;background:${t.colorPrimary};color:${pickOnColor(t.colorPrimary)};padding:10px 16px;border-radius:${t.radius}px;text-decoration:none;font-weight:bold">Ver mi pedido</a></p>
+  </div>
+</div></body></html>`;
+  const text = `Hola ${opts.name},\nTu pedido #${opts.orderNumber} cambió a: ${opts.statusLabel}.\n${opts.note ?? ""}\nVer pedido: ${opts.orderUrl}`;
+  return { subject, html, text };
+}

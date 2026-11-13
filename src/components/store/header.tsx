@@ -36,7 +36,7 @@ export async function StoreHeader() {
 
           <Link href="/" className="flex shrink-0 items-center gap-2 font-display text-lg font-bold sm:text-xl">
             {settings.logoUrl ? (
-              <Image src={settings.logoUrl} alt={settings.storeName} width={160} height={40} className="h-8 w-auto sm:h-10" unoptimized={settings.logoUrl.endsWith(".svg")} />
+              <Image src={settings.logoUrl} alt={settings.storeName} width={160} height={40} className="h-8 w-auto sm:h-10" unoptimized />
             ) : (
               settings.storeName
             )}

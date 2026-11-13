@@ -16,7 +16,7 @@ export default async function OrderPage({ params, searchParams }: Props) {
   await connection();
   const { token } = await params;
   if (!/^[A-Za-z0-9_-]{10,40}$/.test(token)) notFound();
-  const order = await db.order.findUnique({ where: { publicToken: token }, include: { items: true } });
+  const order = await db.order.findUnique({ where: { publicToken: token }, include: { items: true, notes: { where: { internal: false }, orderBy: { createdAt: "desc" } } } });
   if (!order) notFound();
   const sp = await searchParams;
   const [method, settings] = await Promise.all([
@@ -63,6 +63,19 @@ export default async function OrderPage({ params, searchParams }: Props) {
               <dd className="font-mono">Pedido #{order.number}</dd>
             </dl>
           ) : null}
+        </div>
+      ) : null}
+
+      {order.notes.length ? (
+        <div className="mb-6 rounded-lg border border-border bg-surface p-4">
+          <p className="font-semibold">Mensajes de la tienda</p>
+          <ul className="mt-2 flex flex-col gap-2 text-sm">
+            {order.notes.map((n) => (
+              <li key={n.id} className="whitespace-pre-line">
+                {n.body}
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 

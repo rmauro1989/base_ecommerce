@@ -37,6 +37,13 @@ export function createAuth(opts: {
       callbackUrl: { name: name("callback-url"), options: cookieOptions },
       csrfToken: { name: `${secure ? "__Host-" : ""}${opts.cookiePrefix}.csrf`, options: cookieOptions },
     },
+    logger: {
+      // Un login fallido es esperado: no se registra como error
+      error(error) {
+        if (error.name === "CredentialsSignin") return;
+        console.error("[auth]", error);
+      },
+    },
     providers: [
       Credentials({
         id: opts.kind,
