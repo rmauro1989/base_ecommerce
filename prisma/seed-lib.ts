@@ -12,20 +12,26 @@ export async function isDatabaseEmpty(prisma: PrismaClient) {
   return (await prisma.storeSettings.count()) === 0;
 }
 
+/** Lock de Postgres: si arrancan varias réplicas a la vez, solo una carga el seed. */
+const SEED_LOCK_ID = 724001;
+
 export async function seedIfEmpty(prisma: PrismaClient, log: Log = console.log) {
   if (!(await isDatabaseEmpty(prisma))) {
     log("[seed] La base ya tiene datos: no se ejecuta el seed.");
     return false;
   }
-  await seedDatabase(prisma, log);
-  return true;
+  const seeded = await seedDatabase(prisma, log, { onlyIfEmpty: true });
+  if (!seeded) log("[seed] Otra instancia ya cargó los datos.");
+  return seeded;
 }
 
-export async function seedDatabase(prisma: PrismaClient, log: Log = console.log) {
+export async function seedDatabase(prisma: PrismaClient, log: Log = console.log, opts: { onlyIfEmpty?: boolean } = {}): Promise<boolean> {
   const storeName = process.env.STORE_NAME?.trim() || "Mi Tienda Eléctrica";
 
-  await prisma.$transaction(
+  const done = await prisma.$transaction(
     async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${SEED_LOCK_ID})`;
+      if (opts.onlyIfEmpty && (await tx.storeSettings.count()) > 0) return false;
       // ── Configuración de tienda ──
       await tx.storeSettings.create({
         data: {
@@ -217,9 +223,12 @@ export async function seedDatabase(prisma: PrismaClient, log: Log = console.log)
       } else {
         log("[seed] ⚠ ADMIN_EMAIL / ADMIN_PASSWORD no definidos: no se creó usuario admin.");
       }
+      return true;
     },
     { timeout: 60_000 },
   );
+  if (!done) return false;
 
   log(`[seed] Tienda "${storeName}" creada: ${categories.length} categorías, ${attributes.length} atributos, ${products.length + kits.length} productos (${kits.length} kits).`);
+  return true;
 }
