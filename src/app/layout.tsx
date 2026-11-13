@@ -40,7 +40,7 @@ async function ThemedApp({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es-CL" className={`${fontVariablesClassName} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
