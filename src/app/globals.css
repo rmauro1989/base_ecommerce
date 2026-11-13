@@ -1,26 +1,104 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Tailwind solo conoce los colores, radios y tipografías del tema.
+ * La paleta por defecto se elimina (--color-*: initial): una clase como
+ * `bg-red-500` no genera CSS. Los valores reales se inyectan en :root desde
+ * theme.config.ts + admin > Apariencia (ver src/app/layout.tsx); los de aquí
+ * son solo un respaldo idéntico al preset "plano".
+ */
+@theme {
+  --color-*: initial;
+  --color-primary: #16264a;
+  --color-accent: #ffd60a;
+  --color-bg: #f6f5f0;
+  --color-surface: #ffffff;
+  --color-text: #121826;
+  --color-muted: #545c6b;
+  --color-on-primary: #ffffff;
+  --color-on-accent: #111418;
+
+  --font-*: initial;
+  --font-display: var(--ff-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--ff-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--ff-jetbrains-mono), ui-monospace, monospace;
 }
 
+/*
+ * Radios y colores derivados de los tokens. Se declaran también en [data-theme-scope]
+ * para que se recalculen cuando un contenedor usa otro tema (vista previa).
+ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --radius-*: initial;
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) * 1.5);
+  --radius-xl: calc(var(--radius) * 2);
+
+  --color-border: var(--derived-border);
+  --color-border-strong: var(--derived-border-strong);
+  --color-primary-hover: var(--derived-primary-hover);
+  --color-primary-soft: var(--derived-primary-soft);
+  --color-accent-soft: var(--derived-accent-soft);
+  --color-overlay: var(--derived-overlay);
+  --color-danger: var(--derived-danger);
+  --color-success: var(--derived-success);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  --radius: 4px;
+}
+
+:root,
+[data-theme-scope] {
+  --derived-border: color-mix(in oklab, var(--color-text) 14%, var(--color-bg));
+  --derived-border-strong: color-mix(in oklab, var(--color-text) 30%, var(--color-bg));
+  --derived-primary-hover: color-mix(in oklab, var(--color-primary) 82%, var(--color-text));
+  --derived-primary-soft: color-mix(in oklab, var(--color-primary) 10%, var(--color-surface));
+  --derived-accent-soft: color-mix(in oklab, var(--color-accent) 22%, var(--color-surface));
+  --derived-overlay: color-mix(in oklab, var(--color-text) 55%, transparent);
+  /* Estados: tono fijo mezclado con el texto del tema para mantener legibilidad */
+  --derived-danger: color-mix(in oklab, #c62828 75%, var(--color-text));
+  --derived-success: color-mix(in oklab, #1b7f3b 75%, var(--color-text));
+}
+
+[data-theme-scope] {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
   }
-}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+
+  a {
+    color: inherit;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+  }
 }
