@@ -36,16 +36,25 @@ export function ImageManager({ images, onChange, onUploadingChange }: { images: 
   const upload = (files: FileList | File[]) => {
     const list = [...files].filter((f) => f.type.startsWith("image/"));
     if (!list.length) return;
-    const fd = new FormData();
-    fd.set("kind", "product");
-    list.forEach((f) => fd.append("files", f));
     onUploadingChange?.(true);
     startUpload(async () => {
+      // Una foto por envío (límite de tamaño de las server actions)
+      const added: ImageItem[] = [];
+      const errs: string[] = [];
       try {
-        const r = await uploadImagesAction(fd);
-        if (!r.ok) return setErrors([r.message]);
-        setErrors(r.errors);
-        onChange([...images, ...r.assets.map((a) => ({ assetId: a.id, url: a.url, alt: "" }))]);
+        for (const f of list) {
+          const fd = new FormData();
+          fd.set("kind", "product");
+          fd.append("files", f);
+          const r = await uploadImagesAction(fd).catch(() => ({ ok: false as const, message: `${f.name}: no se pudo subir.` }));
+          if (!r.ok) errs.push(r.message);
+          else {
+            errs.push(...r.errors);
+            added.push(...r.assets.map((a) => ({ assetId: a.id, url: a.url, alt: "" })));
+          }
+        }
+        setErrors(errs);
+        if (added.length) onChange([...images, ...added]);
       } finally {
         onUploadingChange?.(false);
       }
